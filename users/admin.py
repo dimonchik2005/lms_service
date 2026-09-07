@@ -7,7 +7,7 @@ from users.forms import (
     CustomUserChangeForm,
     CustomUserCreationForm,
 )
-from users.models import User
+from users.models import User, Payment
 
 
 @admin.register(User)
@@ -115,4 +115,29 @@ class UserAdmin(BaseUserAdmin):
     filter_horizontal = (
         "groups",
         "user_permissions",
+    )
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    """Настройки платежей в административной панели."""
+
+    list_display = (
+        "id",
+        "user",
+        "payment_date",
+        "paid_course",
+        "paid_lesson",
+        "amount",
+        "payment_method",
+    )
+
+    list_filter = (
+        "payment_method",
+        "payment_date",
+    )
+
+    search_fields = (
+        "user__email",
+        "paid_course__title",
+        "paid_lesson__title",
     )

@@ -4,7 +4,8 @@ from django.contrib.auth.models import (
 )
 from django.db import models
 from django.utils import timezone
-
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from users.managers import UserManager
 
 
@@ -82,3 +83,89 @@ class User(
         """Возвращает короткое имя пользователя."""
 
         return self.first_name or self.email
+
+
+class Payment(models.Model):
+    """Платёж пользователя за курс или отдельный урок."""
+
+    class PaymentMethod(models.TextChoices):
+        CASH = "cash", "Наличные"
+        TRANSFER = "transfer", "Перевод на счёт"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payments",
+        verbose_name="Пользователь",
+    )
+
+    payment_date = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата оплаты",
+    )
+
+    paid_course = models.ForeignKey(
+        "lms.Course",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payments",
+        verbose_name="Оплаченный курс",
+    )
+
+    paid_lesson = models.ForeignKey(
+        "lms.Lesson",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payments",
+        verbose_name="Оплаченный урок",
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Сумма оплаты",
+    )
+
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PaymentMethod.choices,
+        verbose_name="Способ оплаты",
+    )
+
+    class Meta:
+        verbose_name = "Платёж"
+        verbose_name_plural = "Платежи"
+        ordering = ("-payment_date",)
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                        models.Q(
+                            paid_course__isnull=False,
+                            paid_lesson__isnull=True,
+                        )
+                        | models.Q(
+                    paid_course__isnull=True,
+                    paid_lesson__isnull=False,
+                )
+                ),
+                name="payment_has_exactly_one_item",
+            ),
+        ]
+
+    def clean(self):
+        """Проверяет, что оплачен курс или урок, но не оба."""
+
+        super().clean()
+
+        if bool(self.paid_course) == bool(self.paid_lesson):
+            raise ValidationError(
+                "Необходимо выбрать либо курс, либо урок."
+            )
+
+    def __str__(self):
+        return (
+            f"{self.user.email} — "
+            f"{self.amount} руб."
+        )

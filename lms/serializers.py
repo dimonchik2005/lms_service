@@ -3,17 +3,43 @@ from rest_framework import serializers
 from lms.models import Course, Lesson
 
 
-class CourseSerializer(serializers.ModelSerializer):
-    """Преобразует курсы между моделью и JSON."""
-
-    class Meta:
-        model = Course
-        fields = "__all__"
-
-
 class LessonSerializer(serializers.ModelSerializer):
-    """Преобразует уроки между моделью и JSON."""
+    """Сериализатор урока."""
 
     class Meta:
         model = Lesson
-        fields = "__all__"
+        fields = (
+            "id",
+            "course",
+            "title",
+            "description",
+            "preview",
+            "video_url",
+        )
+
+
+class CourseSerializer(serializers.ModelSerializer):
+    """Сериализатор курса."""
+
+    lesson_count = serializers.SerializerMethodField()
+
+    lessons = LessonSerializer(
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = Course
+        fields = (
+            "id",
+            "title",
+            "preview",
+            "description",
+            "lesson_count",
+            "lessons",
+        )
+
+    def get_lesson_count(self, obj):
+        """Возвращает количество уроков курса."""
+
+        return obj.lessons.count()
