@@ -2,7 +2,7 @@ from rest_framework import generics, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
 
-from lms.models import Course, Lesson
+from lms.models import Course, Lesson, Subscription
 from lms.permissions import (
     MODERATOR_GROUP_NAME,
     IsModerator,
@@ -12,7 +12,11 @@ from lms.serializers import (
     CourseSerializer,
     LessonSerializer,
 )
-
+from django.shortcuts import get_object_or_404
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from lms.paginators import LMSPagination
 
 def user_is_moderator(user):
     """Проверяет принадлежность пользователя к модераторам."""
@@ -26,6 +30,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     """CRUD для курсов с разграничением доступа."""
 
     serializer_class = CourseSerializer
+    pagination_class = LMSPagination
 
     def get_queryset(self):
         queryset = (
@@ -56,9 +61,9 @@ class CourseViewSet(viewsets.ModelViewSet):
             )
 
         elif self.action in (
-            "retrieve",
-            "update",
-            "partial_update",
+                "retrieve",
+                "update",
+                "partial_update",
         ):
             permission_classes = (
                 IsAuthenticated,
@@ -87,6 +92,7 @@ class LessonListCreateAPIView(
     """Список и создание уроков."""
 
     serializer_class = LessonSerializer
+    pagination_class = LMSPagination
 
     def get_queryset(self):
         queryset = Lesson.objects.select_related(
@@ -167,3 +173,72 @@ class LessonRetrieveUpdateDestroyAPIView(
             permission()
             for permission in permission_classes
         ]
+
+
+class SubscriptionToggleAPIView(APIView):
+    """Создаёт или удаляет подписку на курс."""
+
+    permission_classes = (
+        IsAuthenticated,
+    )
+
+    def post(self, request):
+        course_id = request.data.get(
+            "course_id",
+        )
+
+        if course_id in (None, ""):
+            return Response(
+                {
+                    "message": (
+                        "Необходимо передать ID курса."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            course_id = int(course_id)
+        except (TypeError, ValueError):
+            return Response(
+                {
+                    "message": (
+                        "ID курса должен быть целым числом."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        course = get_object_or_404(
+            Course,
+            pk=course_id,
+        )
+
+        subscription = Subscription.objects.filter(
+            user=request.user,
+            course=course,
+        ).first()
+
+        if subscription:
+            subscription.delete()
+
+            return Response(
+                {
+                    "message": "Подписка удалена.",
+                    "is_subscribed": False,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        Subscription.objects.create(
+            user=request.user,
+            course=course,
+        )
+
+        return Response(
+            {
+                "message": "Подписка добавлена.",
+                "is_subscribed": True,
+            },
+            status=status.HTTP_201_CREATED,
+        )

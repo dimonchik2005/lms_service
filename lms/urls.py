@@ -5,8 +5,8 @@ from lms.views import (
     CourseViewSet,
     LessonListCreateAPIView,
     LessonRetrieveUpdateDestroyAPIView,
+    SubscriptionToggleAPIView,
 )
-
 
 app_name = "lms"
 
@@ -31,5 +31,10 @@ urlpatterns = [
         "lessons/<int:pk>/",
         LessonRetrieveUpdateDestroyAPIView.as_view(),
         name="lesson_detail",
+    ),
+    path(
+        "subscriptions/toggle/",
+        SubscriptionToggleAPIView.as_view(),
+        name="subscription_toggle",
     ),
 ]

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from lms.models import Course, Lesson
+from lms.models import Course, Lesson, Subscription
 
 
 @admin.register(Course)
@@ -31,4 +31,19 @@ class LessonAdmin(admin.ModelAdmin):
     search_fields = (
         "title",
         "description",
+    )
+
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
+    """Отображение подписок в административной панели."""
+
+    list_display = (
+        "id",
+        "user",
+        "course",
+    )
+
+    search_fields = (
+        "user__email",
+        "course__title",
     )

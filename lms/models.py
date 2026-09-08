@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 
+
 class Course(models.Model):
     """Учебный курс."""
 
@@ -81,3 +82,40 @@ class Lesson(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+class Subscription(models.Model):
+    """Подписка пользователя на обновления курса."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="subscriptions",
+        verbose_name="Пользователь",
+    )
+
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="subscriptions",
+        verbose_name="Курс",
+    )
+
+    class Meta:
+        verbose_name = "Подписка"
+        verbose_name_plural = "Подписки"
+        constraints = [
+            models.UniqueConstraint(
+                fields=(
+                    "user",
+                    "course",
+                ),
+                name="unique_user_course_subscription",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user.email} — "
+            f"{self.course.title}"
+        )

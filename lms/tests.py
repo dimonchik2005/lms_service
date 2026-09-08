@@ -1,6 +1,6 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
-from lms.models import Course, Lesson
+from lms.models import Course, Lesson, Subscription
 from django.contrib.auth.models import Group
 from users.models import User
 
@@ -152,7 +152,7 @@ class LMSPermissionsTestCase(APITestCase):
 
         course_ids = [
             course["id"]
-            for course in response.data
+            for course in response.data["results"]
         ]
 
         self.assertIn(
@@ -283,4 +283,282 @@ class LMSPermissionsTestCase(APITestCase):
         self.assertEqual(
             lesson.owner,
             self.owner,
+        )
+
+
+class LessonValidatorTestCase(APITestCase):
+    """Проверяет допустимые ссылки урока."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="validator@example.com",
+            password="TestPassword_2026!",
+        )
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        self.course = Course.objects.create(
+            owner=self.user,
+            title="Курс для проверки ссылок",
+            description="Описание",
+        )
+
+    def test_youtube_link_is_allowed(self):
+        response = self.client.post(
+            "/api/lessons/",
+            {
+                "course": self.course.pk,
+                "title": "Урок YouTube",
+                "description": "Описание",
+                "video_url": (
+                    "https://www.youtube.com/watch?v=test"
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+    def test_external_link_is_rejected(self):
+        response = self.client.post(
+            "/api/lessons/",
+            {
+                "course": self.course.pk,
+                "title": "Урок со сторонней ссылкой",
+                "description": "Описание",
+                "video_url": "https://example.com/video",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "youtube.com",
+            str(response.data["video_url"][0]),
+        )
+
+
+class SubscriptionAPITestCase(APITestCase):
+    """Проверяет добавление и удаление подписки."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="subscriber@example.com",
+            password="TestPassword_2026!",
+        )
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        self.course = Course.objects.create(
+            owner=self.user,
+            title="Курс для подписки",
+            description="Описание",
+        )
+
+        self.url = "/api/subscriptions/toggle/"
+
+    def test_subscription_creation(self):
+        response = self.client.post(
+            self.url,
+            {"course_id": self.course.pk},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertTrue(
+            Subscription.objects.filter(
+                user=self.user,
+                course=self.course,
+            ).exists()
+        )
+
+        self.assertTrue(
+            response.data["is_subscribed"],
+        )
+
+    def test_subscription_deletion(self):
+        Subscription.objects.create(
+            user=self.user,
+            course=self.course,
+        )
+
+        response = self.client.post(
+            self.url,
+            {"course_id": self.course.pk},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertFalse(
+            Subscription.objects.filter(
+                user=self.user,
+                course=self.course,
+            ).exists()
+        )
+
+        self.assertFalse(
+            response.data["is_subscribed"],
+        )
+
+    def test_course_id_is_required(self):
+        response = self.client.post(
+            self.url,
+            {},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(
+            response.data["message"],
+            "Необходимо передать ID курса.",
+        )
+
+    def test_course_id_must_be_integer(self):
+        response = self.client.post(
+            self.url,
+            {"course_id": "не число"},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_nonexistent_course(self):
+        response = self.client.post(
+            self.url,
+            {"course_id": 999999},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_course_serializer_shows_subscription(self):
+        Subscription.objects.create(
+            user=self.user,
+            course=self.course,
+        )
+
+        response = self.client.get(
+            f"/api/courses/{self.course.pk}/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            response.data["is_subscribed"],
+        )
+
+
+class LMSPaginationTestCase(APITestCase):
+    """Проверяет пагинацию курсов и уроков."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="pagination@example.com",
+            password="TestPassword_2026!",
+        )
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        self.courses = []
+
+        for number in range(25):
+            course = Course.objects.create(
+                owner=self.user,
+                title=f"Курс {number}",
+                description="Описание",
+            )
+            self.courses.append(course)
+
+        for number in range(6):
+            Lesson.objects.create(
+                owner=self.user,
+                course=self.courses[0],
+                title=f"Урок {number}",
+                description="Описание",
+                video_url=(
+                    f"https://youtube.com/watch?v={number}"
+                ),
+            )
+
+    def test_course_page_size(self):
+        response = self.client.get(
+            "/api/courses/",
+            {"page_size": 2},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertIn("count", response.data)
+        self.assertIn("results", response.data)
+
+        self.assertEqual(
+            len(response.data["results"]),
+            2,
+        )
+
+    def test_course_max_page_size(self):
+        response = self.client.get(
+            "/api/courses/",
+            {"page_size": 100},
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            20,
+        )
+
+    def test_lesson_pagination(self):
+        response = self.client.get(
+            "/api/lessons/",
+            {"page_size": 3},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertIn("count", response.data)
+        self.assertIn("results", response.data)
+
+        self.assertEqual(
+            len(response.data["results"]),
+            3,
         )
