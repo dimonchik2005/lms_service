@@ -1,10 +1,25 @@
 from django.urls import path
 
-from users.views import (UserRetrieveUpdateAPIView, PaymentListAPIView)
+from users.views import (
+    PaymentListAPIView,
+    UserListAPIView,
+    UserRegistrationAPIView,
+    UserRetrieveUpdateDestroyAPIView,
+)
 
 app_name = "users"
 
 urlpatterns = [
+    path(
+        "",
+        UserListAPIView.as_view(),
+        name="user_list",
+    ),
+    path(
+        "register/",
+        UserRegistrationAPIView.as_view(),
+        name="register",
+    ),
     path(
         "payments/",
         PaymentListAPIView.as_view(),
@@ -12,7 +27,7 @@ urlpatterns = [
     ),
     path(
         "<int:pk>/",
-        UserRetrieveUpdateAPIView.as_view(),
-        name="user_detail_update",
+        UserRetrieveUpdateDestroyAPIView.as_view(),
+        name="user_detail",
     ),
 ]

@@ -20,6 +20,7 @@
     "model": "lms.course",
     "pk": 1001,
     "fields": {
+      "owner": 1001,
       "title": "Python-разработка",
       "preview": "",
       "description": "Практический курс по разработке на Python"
@@ -29,6 +30,7 @@
     "model": "lms.lesson",
     "pk": 1001,
     "fields": {
+      "owner": 1001,
       "course": 1001,
       "title": "Основы Python",
       "description": "Переменные, условия и циклы",

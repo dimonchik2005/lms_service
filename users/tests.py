@@ -18,6 +18,10 @@ class PaymentAPITestCase(APITestCase):
             password="test-password",
         )
 
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
         self.course = Course.objects.create(
             title="Тестовый курс",
             description="Описание курса",
@@ -133,4 +137,161 @@ class PaymentAPITestCase(APITestCase):
         self.assertEqual(
             len(response.data["payments"]),
             2,
+        )
+
+class AuthenticationAndUserAccessTestCase(
+    APITestCase,
+):
+    """Проверяет регистрацию, JWT и профили."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="profile@example.com",
+            password="TestPassword_2026!",
+            city="Таганрог",
+        )
+
+        self.other_user = User.objects.create_user(
+            email="other-profile@example.com",
+            password="TestPassword_2026!",
+            city="Москва",
+        )
+
+    def test_registration(self):
+        response = self.client.post(
+            "/api/users/register/",
+            {
+                "email": "registered@example.com",
+                "phone": "+79991112233",
+                "city": "Таганрог",
+                "password": "StrongPassword_2026!",
+                "password_repeat": "StrongPassword_2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        created_user = User.objects.get(
+            email="registered@example.com",
+        )
+
+        self.assertTrue(
+            created_user.check_password(
+                "StrongPassword_2026!",
+            )
+        )
+
+    def test_duplicate_email_registration(self):
+        response = self.client.post(
+            "/api/users/register/",
+            {
+                "email": "profile@example.com",
+                "password": "StrongPassword_2026!",
+                "password_repeat": "StrongPassword_2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_token_obtain_pair(self):
+        response = self.client.post(
+            "/api/token/",
+            {
+                "email": "profile@example.com",
+                "password": "TestPassword_2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
+    def test_anonymous_user_cannot_get_profiles(self):
+        response = self.client.get(
+            "/api/users/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_user_can_update_own_profile(self):
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        response = self.client.patch(
+            f"/api/users/{self.user.pk}/",
+            {"city": "Ростов-на-Дону"},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+    def test_user_cannot_update_other_profile(self):
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        response = self.client.patch(
+            f"/api/users/{self.other_user.pk}/",
+            {"city": "Изменённый город"},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_other_profile_has_no_payment_history(self):
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        response = self.client.get(
+            f"/api/users/{self.other_user.pk}/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertNotIn(
+            "payments",
+            response.data,
+        )
+        self.assertNotIn(
+            "password",
+            response.data,
+        )
+
+    def test_user_can_delete_own_profile(self):
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        response = self.client.delete(
+            f"/api/users/{self.user.pk}/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
         )
