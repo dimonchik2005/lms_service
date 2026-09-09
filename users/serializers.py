@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from users.models import User
-
+from decimal import Decimal
 from rest_framework import serializers
 
 from lms.serializers import (
@@ -9,11 +9,12 @@ from lms.serializers import (
     LessonSerializer,
 )
 from users.models import Payment, User
-
+from lms.models import Course
 from django.contrib.auth.password_validation import (
     validate_password,
 )
 from django.db import IntegrityError, transaction
+
 
 class PaymentSerializer(serializers.ModelSerializer):
     """Сериализатор платежа с вложенными данными."""
@@ -42,6 +43,20 @@ class PaymentSerializer(serializers.ModelSerializer):
             "paid_lesson",
             "amount",
             "payment_method",
+            "status",
+            "stripe_product_id",
+            "stripe_price_id",
+            "stripe_session_id",
+            "payment_link",
+        )
+        read_only_fields = (
+            "user",
+            "payment_date",
+            "status",
+            "stripe_product_id",
+            "stripe_price_id",
+            "stripe_session_id",
+            "payment_link",
         )
 
 
@@ -69,6 +84,7 @@ class UserSerializer(serializers.ModelSerializer):
             "payments",
         )
 
+
 class PublicUserSerializer(serializers.ModelSerializer):
     """Общедоступные данные пользователя."""
 
@@ -82,6 +98,7 @@ class PublicUserSerializer(serializers.ModelSerializer):
             "avatar",
         )
         read_only_fields = fields
+
 
 class UserRegistrationSerializer(
     serializers.ModelSerializer,
@@ -116,7 +133,7 @@ class UserRegistrationSerializer(
         normalized_email = value.strip().lower()
 
         if User.objects.filter(
-            email__iexact=normalized_email,
+                email__iexact=normalized_email,
         ).exists():
             raise serializers.ValidationError(
                 "Пользователь с таким email уже существует."
@@ -156,3 +173,20 @@ class UserRegistrationSerializer(
                     ),
                 }
             ) from error
+
+
+class StripePaymentCreateSerializer(
+    serializers.Serializer
+):
+    """Данные для создания оплаты курса."""
+
+    paid_course = serializers.PrimaryKeyRelatedField(
+        queryset=Course.objects.all(),
+        help_text="ID оплачиваемого курса",
+    )
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        help_text="Сумма оплаты в рублях",
+    )

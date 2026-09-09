@@ -5,6 +5,8 @@ from users.views import (
     UserListAPIView,
     UserRegistrationAPIView,
     UserRetrieveUpdateDestroyAPIView,
+    StripePaymentCreateAPIView,
+    StripePaymentStatusAPIView,
 )
 
 app_name = "users"
@@ -29,5 +31,15 @@ urlpatterns = [
         "<int:pk>/",
         UserRetrieveUpdateDestroyAPIView.as_view(),
         name="user_detail",
+    ),
+    path(
+        "payments/checkout/",
+        StripePaymentCreateAPIView.as_view(),
+        name="stripe_payment_create",
+    ),
+    path(
+        "payments/<int:pk>/status/",
+        StripePaymentStatusAPIView.as_view(),
+        name="stripe_payment_status",
     ),
 ]

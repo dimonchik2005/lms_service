@@ -1,3 +1,7 @@
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    extend_schema,
+)
 from rest_framework import generics, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
@@ -11,12 +15,15 @@ from lms.permissions import (
 from lms.serializers import (
     CourseSerializer,
     LessonSerializer,
+    SubscriptionToggleRequestSerializer,
+    SubscriptionToggleResponseSerializer,
 )
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from lms.paginators import LMSPagination
+
 
 def user_is_moderator(user):
     """Проверяет принадлежность пользователя к модераторам."""
@@ -33,6 +40,9 @@ class CourseViewSet(viewsets.ModelViewSet):
     pagination_class = LMSPagination
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Course.objects.none()
+
         queryset = (
             Course.objects
             .prefetch_related("lessons")
@@ -95,6 +105,9 @@ class LessonListCreateAPIView(
     pagination_class = LMSPagination
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Lesson.objects.none()
+
         queryset = Lesson.objects.select_related(
             "course",
             "owner",
@@ -176,69 +189,77 @@ class LessonRetrieveUpdateDestroyAPIView(
 
 
 class SubscriptionToggleAPIView(APIView):
-    """Создаёт или удаляет подписку на курс."""
+    """Добавляет или удаляет подписку на курс."""
 
-    permission_classes = (
-        IsAuthenticated,
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Добавить или удалить подписку",
+        description=(
+            "Если подписки пользователя на курс нет, "
+            "она создаётся. Если подписка уже существует, "
+            "она удаляется."
+        ),
+        request=SubscriptionToggleRequestSerializer,
+        responses={
+            200: SubscriptionToggleResponseSerializer,
+            201: SubscriptionToggleResponseSerializer,
+            400: OpenApiResponse(
+                description="Не указан или некорректен ID курса.",
+            ),
+            401: OpenApiResponse(
+                description="Пользователь не авторизован.",
+            ),
+            404: OpenApiResponse(
+                description="=Курс не найден."
+            ),
+        },
     )
-
     def post(self, request):
-        course_id = request.data.get(
-            "course_id",
+        serializer = SubscriptionToggleRequestSerializer(
+            data=request.data,
         )
 
-        if course_id in (None, ""):
+        if not serializer.is_valid():
             return Response(
                 {
-                    "message": (
-                        "Необходимо передать ID курса."
-                    ),
+                    "message": "Необходимо передать ID курса.",
+                    "is_subscribed": False,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            course_id = int(course_id)
-        except (TypeError, ValueError):
-            return Response(
-                {
-                    "message": (
-                        "ID курса должен быть целым числом."
-                    ),
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        course_id = serializer.validated_data[
+            "course_id"
+        ]
 
         course = get_object_or_404(
             Course,
             pk=course_id,
         )
 
-        subscription = Subscription.objects.filter(
-            user=request.user,
-            course=course,
-        ).first()
+        subscription, created = (
+            Subscription.objects.get_or_create(
+                user=request.user,
+                course=course,
+            )
+        )
 
-        if subscription:
-            subscription.delete()
-
+        if created:
             return Response(
                 {
-                    "message": "Подписка удалена.",
-                    "is_subscribed": False,
+                    "message": "Подписка добавлена",
+                    "is_subscribed": True,
                 },
-                status=status.HTTP_200_OK,
+                status=status.HTTP_201_CREATED,
             )
 
-        Subscription.objects.create(
-            user=request.user,
-            course=course,
-        )
+        subscription.delete()
 
         return Response(
             {
-                "message": "Подписка добавлена.",
-                "is_subscribed": True,
+                "message": "Подписка удалена",
+                "is_subscribed": False,
             },
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_200_OK,
         )

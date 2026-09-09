@@ -60,15 +60,35 @@ class CourseSerializer(serializers.ModelSerializer):
 
         return obj.lessons.count()
 
-    def get_is_subscribed(self, obj):
-        """Проверяет подписку текущего пользователя."""
-
+    def get_is_subscribed(self, obj) -> bool:
         request = self.context.get("request")
 
-        if not request or not request.user.is_authenticated:
+        if (
+                request is None
+                or not request.user.is_authenticated
+        ):
             return False
 
-        return Subscription.objects.filter(
+        return obj.subscriptions.filter(
             user=request.user,
-            course=obj,
         ).exists()
+
+
+class SubscriptionToggleRequestSerializer(
+    serializers.Serializer
+):
+    """Данные для добавления или удаления подписки."""
+
+    course_id = serializers.IntegerField(
+        min_value=1,
+        help_text="ID курса",
+    )
+
+
+class SubscriptionToggleResponseSerializer(
+    serializers.Serializer
+):
+    """Результат изменения подписки."""
+
+    message = serializers.CharField()
+    is_subscribed = serializers.BooleanField()
