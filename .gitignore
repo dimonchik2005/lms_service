@@ -49,3 +49,4 @@ dist/
 # Operating systems
 .DS_Store
 Thumbs.db
+celerybeat-schedule*

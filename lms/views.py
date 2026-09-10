@@ -23,6 +23,11 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from lms.paginators import LMSPagination
+from datetime import timedelta
+
+from django.db import transaction
+from django.utils import timezone
+from lms.tasks import send_course_update_email
 
 
 def user_is_moderator(user):
@@ -55,6 +60,27 @@ class CourseViewSet(viewsets.ModelViewSet):
         return queryset.filter(
             owner=self.request.user,
         )
+
+    def perform_update(self, serializer):
+        course_before_update = self.get_object()
+        previous_updated_at = (
+            course_before_update.updated_at
+        )
+
+        course = serializer.save()
+
+        four_hours_passed = (
+                previous_updated_at is None
+                or timezone.now() - previous_updated_at
+                >= timedelta(hours=4)
+        )
+
+        if four_hours_passed:
+            transaction.on_commit(
+                lambda: send_course_update_email.delay(
+                    course.pk,
+                )
+            )
 
     def get_permissions(self):
         if self.action == "create":
@@ -196,9 +222,9 @@ class SubscriptionToggleAPIView(APIView):
     @extend_schema(
         summary="Добавить или удалить подписку",
         description=(
-            "Если подписки пользователя на курс нет, "
-            "она создаётся. Если подписка уже существует, "
-            "она удаляется."
+                "Если подписки пользователя на курс нет, "
+                "она создаётся. Если подписка уже существует, "
+                "она удаляется."
         ),
         request=SubscriptionToggleRequestSerializer,
         responses={

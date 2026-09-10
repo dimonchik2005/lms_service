@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+from celery.schedules import crontab
 from pathlib import Path
 from datetime import timedelta
 
@@ -185,3 +186,35 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
 }
+
+CELERY_BROKER_URL = os.getenv(
+    "CELERY_BROKER_URL",
+)
+
+CELERY_RESULT_BACKEND = os.getenv(
+    "CELERY_RESULT_BACKEND",
+)
+
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = USE_TZ
+
+CELERY_TASK_TRACK_STARTED = True
+
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+CELERY_BEAT_SCHEDULE = {
+    "deactivate-inactive-users-daily": {
+        "task": (
+            "users.tasks.deactivate_inactive_users"
+        ),
+        "schedule": crontab(
+            hour=0,
+            minute=0,
+        ),
+    },
+}
+
+DEFAULT_FROM_EMAIL = os.getenv(
+    "DEFAULT_FROM_EMAIL",
+    "lms-service@example.com",
+)
