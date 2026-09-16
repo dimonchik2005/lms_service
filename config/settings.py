@@ -44,9 +44,16 @@ STRIPE_CANCEL_URL = os.getenv(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv(
+        "ALLOWED_HOSTS",
+        "localhost,127.0.0.1",
+    ).split(",")
+    if host.strip()
+]
 
 # Application definition
 
@@ -98,9 +105,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ["POSTGRES_DB"],
+        "USER": os.environ["POSTGRES_USER"],
+        "PASSWORD": os.environ["POSTGRES_PASSWORD"],
+        "HOST": os.getenv("DATABASE_HOST", "db"),
+        "PORT": os.getenv("DATABASE_PORT", "5432"),
     }
 }
 
@@ -127,7 +138,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.getenv("TIME_ZONE", "UTC")
 
 USE_I18N = True
 

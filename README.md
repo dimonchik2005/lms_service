@@ -446,6 +446,83 @@ git diff --check
 git status
 ```
 
-## Автор
+## Запуск через Docker Compose
 
-GitHub: [dimonchik2005](https://github.com/dimonchik2005)
+Требуется запущенный Docker Desktop с Linux-контейнерами.
+
+### Настройка
+
+Скопируйте пример переменных окружения:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Заполните SECRET_KEY, POSTGRES_PASSWORD и при необходимости
+STRIPE_SECRET_KEY. Без ключа Stripe платежи недоступны.
+
+Для запуска в Docker используйте:
+
+- DATABASE_HOST=db
+- DATABASE_PORT=5432
+- CELERY_BROKER_URL=redis://redis:6379/0
+- CELERY_RESULT_BACKEND=redis://redis:6379/1
+
+### Запуск всех сервисов
+
+```powershell
+docker compose up -d --build
+```
+
+Сервисы:
+
+- web — Django, доступен на http://127.0.0.1:8000.
+- db — PostgreSQL, внутренний порт 5432.
+- redis — брокер и хранилище результатов Celery, внутренний порт 6379.
+- worker — выполнение фоновых задач.
+- beat — запуск задач по расписанию.
+- migrate — применение миграций перед запуском приложения.
+
+Для migrate состояние Exited (0) означает успешное завершение.
+PostgreSQL и Redis не публикуют порты на компьютер.
+
+Swagger: http://127.0.0.1:8000/api/docs/
+Админка: http://127.0.0.1:8000/admin/
+
+Создание администратора:
+
+```powershell
+docker compose exec web python manage.py createsuperuser
+```
+
+Контейнерная база PostgreSQL создаётся отдельно.
+Данные из локального SQLite автоматически не переносятся.
+
+### Проверки и логи
+
+```powershell
+docker compose ps -a
+docker compose exec web python manage.py check
+docker compose exec worker celery -A config inspect ping
+docker compose logs --tail=100 web worker beat
+```
+
+### Остановка и повторный запуск
+
+```powershell
+docker compose down
+docker compose up -d
+```
+
+Именованные volumes сохраняют данные PostgreSQL, Redis,
+загруженные файлы и состояние планировщика Beat.
+Redis использует AOF для сохранения изменений.
+
+Не используйте docker compose down -v, если данные нужно сохранить:
+флаг -v удаляет volumes проекта.
+
+После изменения кода пересоберите образ:
+
+```powershell
+docker compose up -d --build
+```
