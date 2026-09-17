@@ -13,6 +13,8 @@ ENV/
 .env
 .env.*
 !.env.example
+.env.template
+!.env.template
 
 # Django
 db.sqlite3
