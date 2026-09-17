@@ -39,7 +39,12 @@ services:
 
   migrate:
     <<: *app
-    command: ["python", "manage.py", "migrate", "--noinput"]
+    command:
+      - sh
+      - -c
+      - python manage.py migrate --noinput && python manage.py collectstatic --noinput
+    volumes:
+      - static_data:/app/staticfiles
     depends_on:
       db:
         condition: service_healthy
@@ -47,9 +52,9 @@ services:
 
   web:
     <<: *app
-    command: ["python", "manage.py", "runserver", "0.0.0.0:8000", "--noreload"]
-    ports:
-      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+    command: [ "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-" ]
+    expose:
+      - "8000"
     volumes:
       - media_data:/app/media
     depends_on:
@@ -83,8 +88,23 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_PORT:-8000}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_data:/app/staticfiles:ro
+    depends_on:
+      web:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   media_data:
   beat_data:
+  static_data:

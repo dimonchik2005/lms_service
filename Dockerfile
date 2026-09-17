@@ -16,9 +16,9 @@ RUN poetry install --only main --no-root --no-ansi
 COPY . .
 
 RUN useradd --create-home appuser \
-    && mkdir -p /app/media /app/beat \
+    && mkdir -p /app/media /app/beat /app/staticfiles \
     && chown -R appuser:appuser /app
 
 USER appuser
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000", "--noreload"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-"]
