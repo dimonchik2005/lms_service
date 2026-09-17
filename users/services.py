@@ -115,20 +115,3 @@ def retrieve_checkout_session(
         raise StripeServiceError(
             f"Не удалось проверить платёж Stripe: {error}"
         ) from error
-
-def retrieve_checkout_session(
-    session_id: str,
-):
-    """Получает акту текущий статус сессии Stripe."""
-
-    configure_stripe()
-
-    try:
-        return stripe.checkout.Session.retrieve(
-            session_id,
-        )
-    except stripe.StripeError as error:
-        raise StripeServiceError(
-            "Не удалось получить статус платежа "
-            f"Stripe: {error}"
-        ) from error

@@ -10,6 +10,8 @@ __pycache__
 .env.*
 !.env.example
 poetry.toml
+.env.template
+!.env.template
 
 db.sqlite3
 db.sqlite3-journal

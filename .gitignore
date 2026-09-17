@@ -13,6 +13,8 @@ ENV/
 .env
 .env.*
 !.env.example
+.env.template
+!.env.template
 
 # Django
 db.sqlite3
@@ -50,3 +52,7 @@ dist/
 .DS_Store
 Thumbs.db
 celerybeat-schedule*
+
+staticfiles/
+
+.ruff_cache/
